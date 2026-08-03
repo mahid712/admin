@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1200">
+    <title>MGM | Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --primary: #002347;
+            --accent: #b8860b;
+            --bg-light: #f8fafc;
+            --white: #ffffff;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Montserrat', sans-serif; background: var(--bg-light); color: var(--text-dark); overflow-x: hidden; }
+
+        /* --- 1. LOGIN OVERLAY --- */
+        #loginOverlay {
+            position: fixed; inset: 0; background: var(--primary);
+            z-index: 9999; display: flex; align-items: center; justify-content: center;
+        }
+        .login-card {
+            background: white; padding: 40px; border-radius: 20px; width: 100%; max-width: 400px;
+            text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .login-card input {
+            width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px;
+        }
+        .btn-login {
+            width: 100%; background: var(--accent); color: white; border: none;
+            padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 700; margin-top: 10px;
+        }
+
+        /* --- 2. MAIN LAYOUT --- */
+        #adminDashboard { display: none; min-height: 100vh; } 
+
+        .sidebar { width: 260px; background: var(--primary); color: white; display: flex; flex-direction: column; padding: 30px 20px; position: fixed; height: 100vh; }
+        .sidebar h2 { font-size: 1.2rem; margin-bottom: 40px; border-left: 4px solid var(--accent); padding-left: 15px; }
+        
+        .nav-item { padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; transition: 0.3s; display: flex; align-items: center; color: white; text-decoration: none; border: none; background: transparent; width: 100%; font-family: inherit; font-size: 1rem; }
+        .nav-item:hover, .nav-item.active { background: rgba(184, 134, 11, 0.2); color: var(--accent); }
+        .nav-item i { margin-right: 15px; }
+
+        .main-content { margin-left: 260px; flex: 1; padding: 40px; width: calc(100% - 260px); }
+        
+        .stats-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 25px; margin-bottom: 40px; }
+        .stat-card { background: var(--white); padding: 25px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .card-table { background: var(--white); border-radius: 15px; box-shadow: 0 4px 25px rgba(0,0,0,0.05); overflow-x: auto; }
+        
+        table { width: 100%; border-collapse: collapse; min-width: 800px; }
+        th { padding: 20px; text-align: left; background: #f1f5f9; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; }
+        td { padding: 20px; border-bottom: 1px solid #f1f5f9; }
+
+        .student-img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; margin-right: 12px; background: #eee; }
+        .btn-action { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10000; padding: 40px; overflow-y: auto; }
+        .modal-content { background: white; max-width: 1000px; margin: auto; border-radius: 15px; padding: 30px; position: relative; }
+        .doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .doc-card img { width: 100%; height: 150px; object-fit: contain; background: #eee; }
+    </style>
+</head>
+<body>
+
+    <div id="loginOverlay">
+        <div class="login-card">
+            <h2 style="color:var(--primary); margin-bottom:20px;">MGM Admin Login</h2>
+            <input type="email" id="email" placeholder="Admin Email">
+            <input type="password" id="pass" placeholder="Password">
+            <button class="btn-login" id="loginBtn" onclick="handleLogin()">Login to Dashboard</button>
+            <p id="err" style="color:red; margin-top:10px; display:none;">Access Denied</p>
+        </div>
+    </div>
+
+    <div id="adminDashboard">
+        <div class="sidebar">
+            <h2>MGM ADMIN</h2>
+            <button class="nav-item active" onclick="showTab('stats')"><i class="fas fa-th-large"></i> Dashboard</button>
+            <button class="nav-item" onclick="showTab('list')"><i class="fas fa-users"></i> Applicants</button>
+            <button class="nav-item" onclick="exportData()"><i class="fas fa-file-export"></i> Reports (CSV)</button>
+            <button class="nav-item" onclick="handleLogout()" style="margin-top:auto;"><i class="fas fa-sign-out-alt"></i> Logout</button>
+        </div>
+
+        <div class="main-content">
+            <div id="statsSection">
+                <h1 style="margin-bottom:30px;">System Overview</h1>
+                <div class="stats-container">
+                    <div class="stat-card"><h3>2024-25</h3><p>Academic Year</p></div>
+                    <div class="stat-card"><h3 id="countBox">0</h3><p>Total Submissions</p></div>
+                    <div class="stat-card"><h3 id="portalStatusDisplay" style="color:green">Active</h3><p>Portal Status</p></div>
+                </div>
+            </div>
+
+            <div class="card-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Photo</th>
+                            <th>Student</th>
+                            <th>Community</th>
+                            <th>Scholarship</th>
+                            <th>Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="docModal" class="modal">
+        <div class="modal-content">
+            <span style="float:right; cursor:pointer; font-size:2rem;" onclick="closeModal()">&times;</span>
+            <h2 id="mName" style="margin-bottom:20px;"></h2>
+            <div class="doc-grid" id="docGrid"></div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCOdz_97G7m83ffRryCoU5zgh47PcM86-Q",
+            authDomain: "mgm-scholarship.firebaseapp.com",
+            databaseURL: "https://mgm-scholarship-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "mgm-scholarship",
+            storageBucket: "mgm-scholarship.firebasestorage.app",
+            appId: "1:139601798530:web:91a2e2f2e85c0563cbdb9b"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // 1. KEYBOARD "ENTER" LISTENER
+        document.getElementById("pass").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                handleLogin();
+            }
+        });
+
+        // FORCE SESSION PERSISTENCE
+        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION)
+            .then(() => { console.log("Auth persistence set to session."); })
+            .catch((error) => { console.error("Persistence error:", error); });
+
+        // 2. LOGIN / LOGOUT LOGIC
+        function handleLogin() {
+            const loginBtn = document.getElementById('loginBtn');
+            const e = document.getElementById('email').value;
+            const p = document.getElementById('pass').value;
+            
+            if(!e || !p) return; // Prevent empty login attempts
+
+            loginBtn.innerText = "Authenticating...";
+            document.getElementById('err').style.display = 'none';
+
+            auth.signInWithEmailAndPassword(e, p).catch((error) => {
+                document.getElementById('err').style.display = 'block';
+                document.getElementById('err').innerText = "Access Denied: Incorrect Details";
+                loginBtn.innerText = "Login to Dashboard";
+            });
+        }
+
+        function handleLogout() { auth.signOut(); window.location.reload(); }
+
+        auth.onAuthStateChanged(user => {
+            if(user) {
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('adminDashboard').style.display = 'flex';
+                loadSubmissions();
+            } else {
+                document.getElementById('loginOverlay').style.display = 'flex';
+                document.getElementById('adminDashboard').style.display = 'none';
+            }
+        });
+
+        // LIVE PORTAL STATUS
+        db.ref('settings/portalOpen').on('value', (snap) => {
+            const statusText = document.getElementById('portalStatusDisplay');
+            const isOpen = snap.val();
+            if (isOpen === false) {
+                statusText.innerText = "Closed";
+                statusText.style.color = "red";
+            } else {
+                statusText.innerText = "Active";
+                statusText.style.color = "green";
+            }
+        });
+
+        // 3. DATA LOADING
+        let rawData = {};
+        function loadSubmissions() {
+            db.ref('scholarship_submissions').on('value', snap => {
+                rawData = snap.val() || {};
+                const tbody = document.getElementById('tableBody');
+                tbody.innerHTML = "";
+                let count = 0;
+
+                Object.keys(rawData).forEach(key => {
+                    count++;
+                    const item = rawData[key];
+                    tbody.innerHTML += `
+                        <tr>
+                            <td style="display:flex; align-items:center;">
+                                <img src="${item.docs.photo}" class="student-img" onerror="this.src='https://via.placeholder.com/40'">
+                            </td>
+                            <td>${item.fullName}</td>
+                            <td>${item.community}</td>
+                            <td style="font-size:0.8rem;">${item.scholarshipType || 'General'}</td>
+                            <td>${new Date(item.timestamp).toLocaleDateString()}</td>
+                            <td><button class="btn-action" onclick="openDocs('${key}')">Review</button></td>
+                        </tr>
+                    `;
+                });
+                document.getElementById('countBox').innerText = count;
+            });
+        }
+
+        // 4. TAB LOGIC & EXPORT
+        function showTab(type) {
+            document.getElementById('statsSection').style.display = (type === 'stats') ? 'block' : 'none';
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            if (window.event) window.event.currentTarget.classList.add('active');
+        }
+
+        function exportData() {
+            let csv = "Name,Community,Scholarship,Date\n";
+            Object.values(rawData).forEach(i => {
+                csv += `"${i.fullName}","${i.community}","${i.scholarshipType}","${new Date(i.timestamp).toLocaleDateString()}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'MGM_Applicants_Report.csv');
+            a.click();
+        }
+
+        // 5. DOC MODAL
+        function openDocs(key) {
+            const s = rawData[key];
+            document.getElementById('mName').innerText = s.fullName;
+            const grid = document.getElementById('docGrid');
+            grid.innerHTML = "";
+            
+            const labels = { photo: "Photo", income: "Income", caste: "Caste", adhaar: "Adhaar", bank: "Bank", marks: "Marks", id_card: "ID", tc: "TC" };
+            
+            Object.keys(labels).forEach(k => {
+                if(s.docs && s.docs[k]) {
+                    grid.innerHTML += `
+                        <div class="doc-card">
+                            <p><b>${labels[k]}</b></p>
+                            <img src="${s.docs[k]}" onerror="this.src='https://via.placeholder.com/150?text=Error+Loading'">
+                            <a href="${s.docs[k]}" target="_blank" style="font-size:0.7rem; display:block; margin-top:5px;">Open Link</a>
+                        </div>
+                    `;
+                }
+            });
+            document.getElementById('docModal').style.display = "block";
+        }
+        function closeModal() { document.getElementById('docModal').style.display = "none"; }
+    </script>
+</body>
+</html>
