@@ -126,148 +126,126 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyCOdz_97G7m83ffRryCoU5zgh47PcM86-Q",
-            authDomain: "mgm-scholarship.firebaseapp.com",
-            databaseURL: "https://mgm-scholarship-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "mgm-scholarship",
-            storageBucket: "mgm-scholarship.firebasestorage.app",
-            appId: "1:139601798530:web:91a2e2f2e85c0563cbdb9b"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.database();
+ <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCOdz_97G7m83ffRryCoU5zgh47PcM86-Q",
+        authDomain: "mgm-scholarship.firebaseapp.com",
+        databaseURL: "https://mgm-scholarship-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "mgm-scholarship",
+        storageBucket: "mgm-scholarship.firebasestorage.app",
+        appId: "1:139601798530:web:91a2e2f2e85c0563cbdb9b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+    
+    let rawData = {};
+    let currentPortalStatus = true; // State tracker for the toggle
 
-        // 1. KEYBOARD "ENTER" LISTENER
-        document.getElementById("pass").addEventListener("keypress", function(event) {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                handleLogin();
+    // 1. AUTHENTICATION & UI
+    auth.onAuthStateChanged(user => {
+        if(user) {
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('adminDashboard').style.display = 'flex';
+            loadSubmissions();
+        } else {
+            document.getElementById('loginOverlay').style.display = 'flex';
+            document.getElementById('adminDashboard').style.display = 'none';
+        }
+    });
+
+    function handleLogin() {
+        const loginBtn = document.getElementById('loginBtn');
+        const e = document.getElementById('email').value;
+        const p = document.getElementById('pass').value;
+        if(!e || !p) return;
+        loginBtn.innerText = "Authenticating...";
+        auth.signInWithEmailAndPassword(e, p).catch((error) => {
+            document.getElementById('err').style.display = 'block';
+            loginBtn.innerText = "Login to Dashboard";
+        });
+    }
+
+    function handleLogout() { auth.signOut(); window.location.reload(); }
+
+    // 2. PORTAL STATUS TOGGLE
+    db.ref('settings/portalOpen').on('value', (snap) => {
+        currentPortalStatus = snap.val(); 
+        const statusText = document.getElementById('portalStatusDisplay');
+        const isClosed = (currentPortalStatus === false);
+        
+        statusText.innerText = isClosed ? "Closed" : "Active";
+        statusText.style.color = isClosed ? "red" : "green";
+    });
+
+    function togglePortalStatus() {
+        // This switches true to false or false to true
+        db.ref('settings/portalOpen').set(!currentPortalStatus)
+            .catch(error => alert("Permission Error: " + error.message));
+    }
+
+    // 3. DATA LOADING & DELETION
+    function loadSubmissions() {
+        db.ref('scholarship_submissions').on('value', snap => {
+            rawData = snap.val() || {};
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = "";
+            let count = 0;
+
+            Object.keys(rawData).forEach(key => {
+                count++;
+                const item = rawData[key];
+                const photoSrc = item.docs?.photo || 'https://via.placeholder.com/40';
+                const date = item.timestamp ? new Date(item.timestamp).toLocaleDateString() : 'N/A';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><img src="${photoSrc}" class="student-img" onerror="this.src='https://via.placeholder.com/40'"></td>
+                        <td>${item.fullName || 'Unknown'}</td>
+                        <td>${item.community || 'N/A'}</td>
+                        <td>${item.scholarshipType || 'General'}</td>
+                        <td>${date}</td>
+                        <td>
+                            <button class="btn-action" onclick="openDocs('${key}')">Review</button>
+                            <button class="btn-action" style="background:#e11d48; margin-left:5px;" onclick="deleteApplication('${key}')">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById('countBox').innerText = count;
+        });
+    }
+
+    function deleteApplication(key) {
+        if(confirm("Are you sure you want to permanently delete this application?")) {
+            db.ref('scholarship_submissions/' + key).remove()
+                .then(() => console.log("Deleted successfully"))
+                .catch(error => alert("Error: " + error.message));
+        }
+    }
+
+    // 4. MODAL & EXPORT
+    function openDocs(key) {
+        const s = rawData[key];
+        document.getElementById('mName').innerText = s.fullName;
+        const grid = document.getElementById('docGrid');
+        grid.innerHTML = "";
+        const labels = { photo: "Photo", income: "Income", caste: "Caste", adhaar: "Adhaar", bank: "Bank", marks: "Marks", id_card: "ID", tc: "TC" };
+        
+        Object.keys(labels).forEach(k => {
+            if(s.docs && s.docs[k]) {
+                grid.innerHTML += `
+                    <div class="doc-card">
+                        <p><b>${labels[k]}</b></p>
+                        <img src="${s.docs[k]}" onerror="this.src='https://via.placeholder.com/150?text=Error'">
+                    </div>
+                `;
             }
         });
+        document.getElementById('docModal').style.display = "block";
+    }
 
-        // FORCE SESSION PERSISTENCE
-        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION)
-            .then(() => { console.log("Auth persistence set to session."); })
-            .catch((error) => { console.error("Persistence error:", error); });
-
-        // 2. LOGIN / LOGOUT LOGIC
-        function handleLogin() {
-            const loginBtn = document.getElementById('loginBtn');
-            const e = document.getElementById('email').value;
-            const p = document.getElementById('pass').value;
-            
-            if(!e || !p) return; // Prevent empty login attempts
-
-            loginBtn.innerText = "Authenticating...";
-            document.getElementById('err').style.display = 'none';
-
-            auth.signInWithEmailAndPassword(e, p).catch((error) => {
-                document.getElementById('err').style.display = 'block';
-                document.getElementById('err').innerText = "Access Denied: Incorrect Details";
-                loginBtn.innerText = "Login to Dashboard";
-            });
-        }
-
-        function handleLogout() { auth.signOut(); window.location.reload(); }
-
-        auth.onAuthStateChanged(user => {
-            if(user) {
-                document.getElementById('loginOverlay').style.display = 'none';
-                document.getElementById('adminDashboard').style.display = 'flex';
-                loadSubmissions();
-            } else {
-                document.getElementById('loginOverlay').style.display = 'flex';
-                document.getElementById('adminDashboard').style.display = 'none';
-            }
-        });
-
-        // LIVE PORTAL STATUS
-        db.ref('settings/portalOpen').on('value', (snap) => {
-            const statusText = document.getElementById('portalStatusDisplay');
-            const isOpen = snap.val();
-            if (isOpen === false) {
-                statusText.innerText = "Closed";
-                statusText.style.color = "red";
-            } else {
-                statusText.innerText = "Active";
-                statusText.style.color = "green";
-            }
-        });
-
-        // 3. DATA LOADING
-        let rawData = {};
-        function loadSubmissions() {
-            db.ref('scholarship_submissions').on('value', snap => {
-                rawData = snap.val() || {};
-                const tbody = document.getElementById('tableBody');
-                tbody.innerHTML = "";
-                let count = 0;
-
-                Object.keys(rawData).forEach(key => {
-                    count++;
-                    const item = rawData[key];
-                    tbody.innerHTML += `
-                        <tr>
-                            <td style="display:flex; align-items:center;">
-                                <img src="${item.docs.photo}" class="student-img" onerror="this.src='https://via.placeholder.com/40'">
-                            </td>
-                            <td>${item.fullName}</td>
-                            <td>${item.community}</td>
-                            <td style="font-size:0.8rem;">${item.scholarshipType || 'General'}</td>
-                            <td>${new Date(item.timestamp).toLocaleDateString()}</td>
-                            <td><button class="btn-action" onclick="openDocs('${key}')">Review</button></td>
-                        </tr>
-                    `;
-                });
-                document.getElementById('countBox').innerText = count;
-            });
-        }
-
-        // 4. TAB LOGIC & EXPORT
-        function showTab(type) {
-            document.getElementById('statsSection').style.display = (type === 'stats') ? 'block' : 'none';
-            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-            if (window.event) window.event.currentTarget.classList.add('active');
-        }
-
-        function exportData() {
-            let csv = "Name,Community,Scholarship,Date\n";
-            Object.values(rawData).forEach(i => {
-                csv += `"${i.fullName}","${i.community}","${i.scholarshipType}","${new Date(i.timestamp).toLocaleDateString()}"\n`;
-            });
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.setAttribute('href', url);
-            a.setAttribute('download', 'MGM_Applicants_Report.csv');
-            a.click();
-        }
-
-        // 5. DOC MODAL
-        function openDocs(key) {
-            const s = rawData[key];
-            document.getElementById('mName').innerText = s.fullName;
-            const grid = document.getElementById('docGrid');
-            grid.innerHTML = "";
-            
-            const labels = { photo: "Photo", income: "Income", caste: "Caste", adhaar: "Adhaar", bank: "Bank", marks: "Marks", id_card: "ID", tc: "TC" };
-            
-            Object.keys(labels).forEach(k => {
-                if(s.docs && s.docs[k]) {
-                    grid.innerHTML += `
-                        <div class="doc-card">
-                            <p><b>${labels[k]}</b></p>
-                            <img src="${s.docs[k]}" onerror="this.src='https://via.placeholder.com/150?text=Error+Loading'">
-                            <a href="${s.docs[k]}" target="_blank" style="font-size:0.7rem; display:block; margin-top:5px;">Open Link</a>
-                        </div>
-                    `;
-                }
-            });
-            document.getElementById('docModal').style.display = "block";
-        }
-        function closeModal() { document.getElementById('docModal').style.display = "none"; }
-    </script>
+    function closeModal() { document.getElementById('docModal').style.display = "none"; }
+</script>
 </body>
 </html>
